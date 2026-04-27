@@ -119,6 +119,16 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
 });
 
+const unitInterestBonus = {
+  years: 600,
+  months: 500,
+  days: 460,
+  hours: 360,
+  weeks: 340,
+  minutes: 210,
+  seconds: 120,
+};
+
 function setDefaultDate() {
   const fallback = new Date();
   fallback.setFullYear(fallback.getFullYear() - 30);
@@ -289,6 +299,85 @@ function uniqueSorted(values) {
   return [...new Set(values)]
     .filter((value) => Number.isFinite(value))
     .sort((a, b) => a - b);
+}
+
+function calendarKey(date) {
+  return toDateInputValue(date);
+}
+
+function magnitudeBonus(item) {
+  const rounded = Math.round(item.value);
+
+  if (item.unit === "years") {
+    if (rounded >= 10 && rounded % 10 === 0) return 190;
+    if (rounded >= 10 && rounded % 5 === 0) return 140;
+    return rounded < 10 ? 110 : 60;
+  }
+
+  if (item.unit === "months") {
+    return rounded % 100 === 0 ? 120 : 40;
+  }
+
+  if (item.unit === "weeks") {
+    return rounded % 1000 === 0 ? 110 : rounded % 100 === 0 ? 70 : 30;
+  }
+
+  if (item.unit === "days") {
+    return rounded % 10000 === 0 ? 130 : rounded % 1000 === 0 ? 95 : 45;
+  }
+
+  if (item.unit === "hours") {
+    return rounded % 1000000 === 0 ? 155 : rounded % 100000 === 0 ? 120 : 55;
+  }
+
+  if (item.unit === "minutes") {
+    return rounded % 10000000 === 0 ? 145 : rounded % 1000000 === 0 ? 115 : 45;
+  }
+
+  if (item.unit === "seconds") {
+    return rounded % 1000000000 === 0 ? 250 : rounded % 100000000 === 0 ? 145 : 90;
+  }
+
+  return 0;
+}
+
+function milestoneInterestScore(item) {
+  const sourceBonus = item.sourceType === "combined" ? 45 : 0;
+  return unitInterestBonus[item.unit] + magnitudeBonus(item) + sourceBonus;
+}
+
+function sourceLabelFor(item) {
+  return item.sourceType === "combined" ? "Together" : shortSourceName(item.sourceName);
+}
+
+function groupSameDayMilestones(items, maxItems) {
+  const groups = new Map();
+
+  for (const item of items) {
+    const key = calendarKey(item.date);
+    const group = groups.get(key) || [];
+    group.push(item);
+    groups.set(key, group);
+  }
+
+  return Array.from(groups.values())
+    .map((group) => {
+      const sorted = group.sort((a, b) => {
+        const scoreSort = milestoneInterestScore(b) - milestoneInterestScore(a);
+        return scoreSort || b.priority - a.priority || a.date - b.date;
+      });
+      const [primary, ...related] = sorted;
+
+      return {
+        ...primary,
+        related,
+      };
+    })
+    .sort((a, b) => {
+      const dateSort = a.date - b.date;
+      return dateSort || milestoneInterestScore(b) - milestoneInterestScore(a);
+    })
+    .slice(0, maxItems);
 }
 
 function milestoneValues(unit, current, elapsedMs, mode) {
@@ -481,7 +570,7 @@ function futureMilestones(group, now) {
     .sort(byDate)
     .forEach(addChosen);
 
-  return Array.from(chosen.values()).sort(byDate);
+  return groupSameDayMilestones(Array.from(chosen.values()).sort(byDate), maxItems);
 }
 
 function renderEventList(now) {
@@ -629,7 +718,18 @@ function renderTimeline(group, now) {
   timeline.innerHTML = items
     .map((item, index) => {
       const side = index % 2 === 0 ? "top" : "bottom";
-      const sourceLabel = item.sourceType === "combined" ? "Together" : shortSourceName(item.sourceName);
+      const sourceLabel = sourceLabelFor(item);
+      const extraText = item.related
+        .slice(0, 2)
+        .map((related) => {
+          const relatedSource = sourceLabelFor(related);
+          const prefix = relatedSource === sourceLabel ? "" : `${relatedSource}: `;
+          return `${prefix}${related.displayTitle}`;
+        })
+        .join(" + ");
+      const extraLabel = item.related.length
+        ? `also ${extraText}${item.related.length > 2 ? ` + ${item.related.length - 2} more` : ""}`
+        : "";
 
       return `
         <article class="milestone ${side}" style="--accent: ${item.color}">
@@ -637,7 +737,8 @@ function renderTimeline(group, now) {
           <div class="milestone-card">
             <strong title="${escapeHtml(item.displayTitle)}">${escapeHtml(item.displayTitle)}</strong>
             <time datetime="${item.date.toISOString()}">${dateFormatter.format(item.date)}</time>
-            <span title="${escapeHtml(sourceLabel)}">${escapeHtml(sourceLabel)}</span>
+            <span class="milestone-source" title="${escapeHtml(sourceLabel)}">${escapeHtml(sourceLabel)}</span>
+            ${extraLabel ? `<span class="milestone-extra" title="${escapeHtml(extraLabel)}">${escapeHtml(extraLabel)}</span>` : ""}
           </div>
         </article>
       `;
