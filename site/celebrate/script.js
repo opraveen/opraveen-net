@@ -98,6 +98,7 @@ const granularityLabel = document.querySelector("#granularity-label");
 let events = [];
 let nextId = 1;
 let ticker = null;
+let nextFullRefreshAt = null;
 
 const formatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 0,
@@ -128,12 +129,6 @@ const unitInterestBonus = {
   minutes: 210,
   seconds: 120,
 };
-
-function setDefaultDate() {
-  const fallback = new Date();
-  fallback.setFullYear(fallback.getFullYear() - 30);
-  dateInput.value = toDateInputValue(fallback);
-}
 
 function toDateInputValue(date) {
   const year = date.getFullYear();
@@ -458,6 +453,81 @@ function combinedElapsedMs(group, now) {
   return group.reduce((total, event) => total + elapsedMsFor(event, now), 0);
 }
 
+function activeEventCount(group, now) {
+  return group.filter((event) => event.date <= now).length;
+}
+
+function nextSelectedEventStart(group, now) {
+  return group
+    .filter((event) => event.date > now)
+    .map((event) => event.date)
+    .sort((a, b) => a - b)[0] || null;
+}
+
+function firstDate(...dates) {
+  return dates
+    .filter(Boolean)
+    .sort((a, b) => a - b)[0] || null;
+}
+
+function dateForCombinedTarget(group, now, targetMs) {
+  const starts = group
+    .map((event) => event.date.getTime())
+    .sort((a, b) => a - b);
+  let time = now.getTime();
+  let total = starts.reduce((sum, start) => sum + Math.max(0, time - start), 0);
+
+  if (!starts.length || targetMs <= total) {
+    return new Date(time);
+  }
+
+  let nextStartIndex = starts.findIndex((start) => start > time);
+  if (nextStartIndex === -1) {
+    nextStartIndex = starts.length;
+  }
+
+  let activeCount = nextStartIndex;
+
+  while (total < targetMs) {
+    const nextStart = nextStartIndex < starts.length
+      ? starts[nextStartIndex]
+      : Infinity;
+
+    if (activeCount === 0) {
+      if (!Number.isFinite(nextStart)) {
+        return null;
+      }
+
+      time = nextStart;
+      while (starts[nextStartIndex] <= time) {
+        activeCount += 1;
+        nextStartIndex += 1;
+      }
+      continue;
+    }
+
+    const needed = targetMs - total;
+    const spanToNextStart = nextStart - time;
+    const gainToNextStart = Number.isFinite(spanToNextStart)
+      ? activeCount * spanToNextStart
+      : Infinity;
+
+    if (needed <= gainToNextStart) {
+      return new Date(time + needed / activeCount);
+    }
+
+    total += gainToNextStart;
+    time = nextStart;
+
+    while (starts[nextStartIndex] <= time) {
+      activeCount += 1;
+      nextStartIndex += 1;
+    }
+  }
+
+  return new Date(time);
+}
+
 function futureMilestonesForEvent(event, now) {
   const elapsedMs = elapsedMsFor(event, now);
   const mode = milestoneMode();
@@ -485,18 +555,17 @@ function futureMilestonesForGroup(group, now) {
   }
 
   const totalElapsed = combinedElapsedMs(group, now);
-  const rate = group.length;
   const mode = milestoneMode();
 
   return milestoneDefs.flatMap((def) =>
     milestoneValues(def.unit, totalElapsed / def.ms, totalElapsed, mode)
       .map((value) => {
         const targetMs = value * def.ms;
-        const waitMs = (targetMs - totalElapsed) / rate;
+        const date = dateForCombinedTarget(group, now, targetMs);
 
         return {
           color: def.color,
-          date: new Date(now.getTime() + waitMs),
+          date,
           displayTitle: formatMilestoneTitle(value, def.unit),
           priority: def.priority + 0.5,
           sourceName: "Together",
@@ -505,7 +574,7 @@ function futureMilestonesForGroup(group, now) {
           value,
         };
       })
-      .filter((item) => item.date > now && Number.isFinite(item.date.getTime()))
+      .filter((item) => item.date && item.date > now && Number.isFinite(item.date.getTime()))
       .slice(0, 5),
   );
 }
@@ -625,7 +694,10 @@ function renderEventList(now) {
 function renderMetrics(totalMs, group, now) {
   const single = group.length === 1 ? group[0] : null;
   const calendar = single ? preciseCalendarParts(single.date, now) : approximateParts(totalMs);
-  const context = group.length === 1 ? "this date" : `${group.length} selected`;
+  const activeCount = activeEventCount(group, now);
+  const context = group.length === 1
+    ? single.date > now ? "until start" : "this date"
+    : activeCount === group.length ? `${group.length} selected` : `${activeCount} active now`;
 
   const metrics = [
     {
@@ -696,9 +768,10 @@ function renderTimeline(group, now) {
   const items = futureMilestones(group, now);
 
   if (!items.length) {
-    timeline.innerHTML = `<p class="empty-state">Select a date to map the next celebration.</p>`;
+    timeline.innerHTML = `<p class="empty-state">Add or select a date to map the next celebration.</p>`;
     timelineRange.textContent = "Any unit can make the list.";
     nextToast.innerHTML = `<span class="mini-label">Next celebration</span><strong>Waiting for a date</strong>`;
+    nextFullRefreshAt = null;
     return;
   }
 
@@ -714,6 +787,7 @@ function renderTimeline(group, now) {
   `;
   timelineRange.textContent = `${dateFormatter.format(firstDate)} to ${dateFormatter.format(lastDate)}`;
   timeline.style.setProperty("--milestone-count", items.length);
+  nextFullRefreshAt = soonest.date;
 
   timeline.innerHTML = items
     .map((item, index) => {
@@ -746,19 +820,12 @@ function renderTimeline(group, now) {
     .join("");
 }
 
-function render() {
-  const now = new Date();
-  const group = selectedEvents();
-
-  granularityLabel.textContent = granularityModes[milestoneMode()].label;
-  renderEventList(now);
-
+function renderCurrent(group, now) {
   if (!group.length) {
     headline.textContent = events.length
       ? "Select one or more dates to start the party math."
       : "Add a date to begin.";
     metricsGrid.innerHTML = "";
-    renderTimeline(group, now);
     return;
   }
 
@@ -773,11 +840,43 @@ function render() {
     headline.textContent = `${prefix}: ${calendar.years}y ${calendar.months}m ${calendar.days}d.`;
   } else {
     const combined = approximateParts(totalMs);
-    headline.textContent = `${group.length} dates together: ${combined.years}y ${combined.months}m ${combined.days}d.`;
+    const activeCount = activeEventCount(group, now);
+    const prefix = activeCount === group.length
+      ? `${group.length} dates together`
+      : `${activeCount} active now (${group.length} selected)`;
+    headline.textContent = `${prefix}: ${combined.years}y ${combined.months}m ${combined.days}d.`;
   }
 
   renderMetrics(totalMs, group, now);
-  renderTimeline(group, now);
+}
+
+function render({ refreshEvents = true, refreshTimeline = true } = {}) {
+  const now = new Date();
+  const group = selectedEvents();
+
+  granularityLabel.textContent = granularityModes[milestoneMode()].label;
+
+  if (refreshEvents) {
+    renderEventList(now);
+  }
+
+  renderCurrent(group, now);
+
+  if (refreshTimeline) {
+    renderTimeline(group, now);
+    nextFullRefreshAt = firstDate(nextFullRefreshAt, nextSelectedEventStart(group, now));
+  }
+}
+
+function renderTick() {
+  const now = new Date();
+
+  if (nextFullRefreshAt && now >= nextFullRefreshAt) {
+    render();
+    return;
+  }
+
+  render({ refreshEvents: false, refreshTimeline: false });
 }
 
 function addEventFromForm() {
@@ -831,9 +930,7 @@ clearSelectionButton.addEventListener("click", () => {
   render();
 });
 
-granularityInput.addEventListener("input", render);
+granularityInput.addEventListener("input", () => render({ refreshEvents: false }));
 
-setDefaultDate();
-events.push(makeEvent(nameInput.value, parseSelection()));
 render();
-ticker = setInterval(render, 1000);
+ticker = setInterval(renderTick, 1000);
