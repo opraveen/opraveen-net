@@ -52,9 +52,22 @@
           <div class="selection-actions">
             <button class="ghost-button" id="select-all" type="button">All</button>
             <button class="ghost-button" id="clear-selection" type="button">None</button>
+            <button class="ghost-button" id="share-setup" type="button" disabled>Share</button>
           </div>
         </div>
         <div class="event-list" id="event-list" aria-label="Saved dates"></div>
+        <div class="share-panel" id="share-panel" hidden>
+          <p>
+            <strong>Private link:</strong>
+            this URL includes every saved name, date, and time, plus which dates are selected and the milestone mood.
+            Share it only on purpose.
+          </p>
+          <div class="share-actions">
+            <input id="share-url" type="text" readonly aria-label="Shareable setup link" />
+            <button id="copy-share" type="button">Copy link</button>
+          </div>
+          <span id="share-status" aria-live="polite"></span>
+        </div>
       </section>
 
       <section class="moment-strip" aria-live="polite">

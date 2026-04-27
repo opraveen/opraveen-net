@@ -152,6 +152,11 @@ button:hover {
   background: #263442;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .button-icon {
   width: 16px;
   height: 16px;
@@ -215,6 +220,57 @@ button:hover {
   overflow-x: auto;
   padding-bottom: 2px;
   scrollbar-width: thin;
+}
+
+.share-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(232, 93, 79, 0.22);
+  border-left: 5px solid var(--coral);
+  border-radius: 8px;
+  background: #fff6e7;
+}
+
+.share-panel[hidden] {
+  display: none;
+}
+
+.share-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(0.66rem, 0.74vw, 0.74rem);
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.share-panel strong {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.share-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+#share-url {
+  min-height: 34px;
+  font-size: clamp(0.66rem, 0.74vw, 0.74rem);
+}
+
+#copy-share {
+  min-width: 94px;
+}
+
+#share-status {
+  min-height: 1em;
+  color: var(--aqua-dark);
+  font-size: clamp(0.62rem, 0.7vw, 0.7rem);
+  font-weight: 800;
 }
 
 .event-card {
@@ -700,6 +756,10 @@ button:hover {
 
   .event-list {
     grid-auto-columns: minmax(176px, 220px);
+  }
+
+  .share-actions {
+    grid-template-columns: 1fr;
   }
 
   .date-form {

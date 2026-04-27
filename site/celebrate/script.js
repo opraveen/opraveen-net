@@ -87,6 +87,11 @@ const eventList = document.querySelector("#event-list");
 const selectionSummary = document.querySelector("#selection-summary");
 const selectAllButton = document.querySelector("#select-all");
 const clearSelectionButton = document.querySelector("#clear-selection");
+const shareButton = document.querySelector("#share-setup");
+const sharePanel = document.querySelector("#share-panel");
+const shareUrlInput = document.querySelector("#share-url");
+const copyShareButton = document.querySelector("#copy-share");
+const shareStatus = document.querySelector("#share-status");
 const headline = document.querySelector("#headline");
 const nextToast = document.querySelector("#next-toast");
 const metricsGrid = document.querySelector("#metrics-grid");
@@ -131,10 +136,28 @@ const unitInterestBonus = {
 };
 
 function toDateInputValue(date) {
-  const year = date.getFullYear();
+  const year = String(date.getFullYear()).padStart(4, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function toTimeInputValue(date) {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function dateFromParts(dateValue, timeValue = "") {
+  const [year, month, day] = dateValue.split("-").map(Number);
+  const [hours = 0, minutes = 0] = timeValue
+    ? timeValue.split(":").map(Number)
+    : [];
+  const date = new Date(0);
+
+  date.setFullYear(year, month - 1, day);
+  date.setHours(hours, minutes, 0, 0);
+  return date;
 }
 
 function parseSelection() {
@@ -142,12 +165,7 @@ function parseSelection() {
     return null;
   }
 
-  const [year, month, day] = dateInput.value.split("-").map(Number);
-  const [hours = 0, minutes = 0] = timeInput.value
-    ? timeInput.value.split(":").map(Number)
-    : [];
-
-  return new Date(year, month - 1, day, hours, minutes, 0, 0);
+  return dateFromParts(dateInput.value, timeInput.value);
 }
 
 function formatNumber(value, digits = 0) {
@@ -429,15 +447,16 @@ function milestoneValues(unit, current, elapsedMs, mode) {
   return [];
 }
 
-function makeEvent(name, date) {
+function makeEvent(name, date, options = {}) {
   const id = nextId++;
 
   return {
     color: eventColors[(id - 1) % eventColors.length],
     date,
+    hasTime: Boolean(options.hasTime),
     id,
     name: name.trim() || `Date ${id}`,
-    selected: true,
+    selected: options.selected ?? true,
   };
 }
 
@@ -447,6 +466,113 @@ function elapsedMsFor(event, now) {
 
 function selectedEvents() {
   return events.filter((event) => event.selected);
+}
+
+function encodeSharePayload(payload) {
+  const bytes = new TextEncoder().encode(JSON.stringify(payload));
+  let binary = "";
+
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+
+  return btoa(binary)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
+}
+
+function decodeSharePayload(value) {
+  const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  const binary = atob(padded);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+function sharePayload() {
+  return {
+    v: 1,
+    mode: milestoneMode(),
+    events: events.map((event) => ({
+      d: toDateInputValue(event.date),
+      n: event.name,
+      s: event.selected,
+      t: event.hasTime ? toTimeInputValue(event.date) : "",
+    })),
+  };
+}
+
+function buildShareUrl() {
+  const url = new URL(window.location.href);
+  url.hash = `setup=${encodeSharePayload(sharePayload())}`;
+  return url.toString();
+}
+
+function loadSharedSetup() {
+  const hash = window.location.hash.startsWith("#")
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  const payloadValue = new URLSearchParams(hash).get("setup");
+
+  if (!payloadValue) {
+    return false;
+  }
+
+  try {
+    const payload = decodeSharePayload(payloadValue);
+    const sharedEvents = Array.isArray(payload.events) ? payload.events : [];
+    const sharedMode = Number(payload.mode);
+
+    nextId = 1;
+    events = sharedEvents
+      .slice(0, 20)
+      .map((item) => {
+        const dateValue = typeof item.d === "string" ? item.d : "";
+        const timeValue = typeof item.t === "string" ? item.t : "";
+        const date = dateFromParts(dateValue, timeValue);
+
+        if (!dateValue || Number.isNaN(date.getTime())) {
+          return null;
+        }
+
+        return makeEvent(String(item.n || "").slice(0, 36), date, {
+          hasTime: Boolean(timeValue),
+          selected: item.s !== false,
+        });
+      })
+      .filter(Boolean);
+
+    if (Number.isFinite(sharedMode)) {
+      granularityInput.value = String(Math.min(granularityModes.length - 1, Math.max(0, sharedMode)));
+    }
+
+    return true;
+  } catch (error) {
+    console.warn("Could not read shared Celebrate setup.", error);
+    return false;
+  }
+}
+
+function refreshSharePanel() {
+  shareButton.disabled = !events.length;
+
+  if (!events.length) {
+    sharePanel.hidden = true;
+    shareUrlInput.value = "";
+    shareStatus.textContent = "";
+    return;
+  }
+
+  if (!sharePanel.hidden) {
+    const value = buildShareUrl();
+
+    if (shareUrlInput.value !== value) {
+      shareUrlInput.value = value;
+      shareStatus.textContent = "";
+    }
+  }
 }
 
 function combinedElapsedMs(group, now) {
@@ -711,7 +837,7 @@ function renderMetrics(totalMs, group, now) {
       key: "months",
       unit: "Months",
       value: totalMs < MS.year ? formatNumber(totalMs / MS.month, 1) : formatWhole(totalMs / MS.month),
-      note: single ? `${calendar.months} extra` : context,
+      note: "rounded months",
       exact: `${formatWhole(totalMs / MS.month)} months rounded`,
     },
     {
@@ -866,6 +992,8 @@ function render({ refreshEvents = true, refreshTimeline = true } = {}) {
     renderTimeline(group, now);
     nextFullRefreshAt = firstDate(nextFullRefreshAt, nextSelectedEventStart(group, now));
   }
+
+  refreshSharePanel();
 }
 
 function renderTick() {
@@ -879,6 +1007,27 @@ function renderTick() {
   render({ refreshEvents: false, refreshTimeline: false });
 }
 
+async function copyShareLink() {
+  const value = buildShareUrl();
+
+  shareUrlInput.value = value;
+
+  try {
+    await navigator.clipboard.writeText(value);
+    shareStatus.textContent = "Copied. This link includes personal dates.";
+  } catch (error) {
+    shareUrlInput.focus();
+    shareUrlInput.select();
+
+    try {
+      document.execCommand("copy");
+      shareStatus.textContent = "Copied. This link includes personal dates.";
+    } catch {
+      shareStatus.textContent = "Select the link and copy it.";
+    }
+  }
+}
+
 function addEventFromForm() {
   const date = parseSelection();
 
@@ -887,7 +1036,7 @@ function addEventFromForm() {
     return;
   }
 
-  events.push(makeEvent(nameInput.value, date));
+  events.push(makeEvent(nameInput.value, date, { hasTime: Boolean(timeInput.value) }));
   render();
 }
 
@@ -930,7 +1079,35 @@ clearSelectionButton.addEventListener("click", () => {
   render();
 });
 
+shareButton.addEventListener("click", () => {
+  if (!events.length) {
+    return;
+  }
+
+  sharePanel.hidden = !sharePanel.hidden;
+  shareStatus.textContent = "";
+  refreshSharePanel();
+
+  if (!sharePanel.hidden) {
+    shareUrlInput.focus();
+    shareUrlInput.select();
+  }
+});
+
+copyShareButton.addEventListener("click", () => {
+  if (events.length) {
+    copyShareLink();
+  }
+});
+
 granularityInput.addEventListener("input", () => render({ refreshEvents: false }));
 
+window.addEventListener("hashchange", () => {
+  if (loadSharedSetup()) {
+    render();
+  }
+});
+
+loadSharedSetup();
 render();
 ticker = setInterval(renderTick, 1000);
