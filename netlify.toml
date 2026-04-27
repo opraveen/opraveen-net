@@ -42,6 +42,11 @@
   status = 410
 
 [[redirects]]
-  from = "/search*"
+  from = "/search"
+  to = "/"
+  status = 302
+
+[[redirects]]
+  from = "/search/*"
   to = "/"
   status = 302

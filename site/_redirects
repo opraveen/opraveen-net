@@ -6,4 +6,5 @@
 /2011/* /gone.html 410
 /2012/* /gone.html 410
 /feeds/* /gone.html 410
-/search* / 302
+/search / 302
+/search/* / 302
