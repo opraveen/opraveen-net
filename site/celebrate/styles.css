@@ -435,6 +435,61 @@ button:hover {
   grid-column: 1 / -1;
 }
 
+.unit-legend {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px 9px;
+  color: var(--muted);
+  font-size: clamp(0.54rem, 0.62vw, 0.62rem);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.unit-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.legend-dot {
+  width: 0.48rem;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--legend-color);
+  box-shadow: 0 0 0 1px rgba(23, 32, 42, 0.15);
+}
+
+.legend-years {
+  --legend-color: var(--aqua);
+}
+
+.legend-months {
+  --legend-color: var(--coral);
+}
+
+.legend-weeks {
+  --legend-color: var(--gold);
+}
+
+.legend-days {
+  --legend-color: var(--leaf);
+}
+
+.legend-hours {
+  --legend-color: var(--sky);
+}
+
+.legend-minutes {
+  --legend-color: var(--berry);
+}
+
+.legend-seconds {
+  --legend-color: var(--ink);
+}
+
 .timeline {
   position: relative;
   display: grid;
@@ -666,8 +721,10 @@ button:hover {
   }
 
   .milestone-settings,
-  .milestone-settings #timeline-range {
+  .milestone-settings #timeline-range,
+  .unit-legend {
     text-align: left;
+    justify-content: flex-start;
   }
 
   .metrics-grid {
