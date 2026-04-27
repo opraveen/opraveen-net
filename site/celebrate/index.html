@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reasons to Celebrate</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="control-bar">
+        <div class="intro">
+          <p class="eyebrow">Reasons to Celebrate</p>
+          <h1>Every date has a party hiding in it.</h1>
+        </div>
+
+        <form class="date-form" id="event-form">
+          <label>
+            <span>Event</span>
+            <input id="event-name" type="text" maxlength="36" value="My birthday" />
+          </label>
+
+          <label>
+            <span>Date</span>
+            <input id="event-date" type="date" required />
+          </label>
+
+          <label>
+            <span>Time</span>
+            <input id="event-time" type="time" />
+          </label>
+
+          <button type="submit">
+            <span class="button-icon" aria-hidden="true"></span>
+            Add date
+          </button>
+        </form>
+      </section>
+
+      <section class="event-panel">
+        <div class="event-panel-heading">
+          <div>
+            <p class="label">Dates in the mix</p>
+            <strong id="selection-summary">1 selected</strong>
+          </div>
+          <div class="selection-actions">
+            <button class="ghost-button" id="select-all" type="button">All</button>
+            <button class="ghost-button" id="clear-selection" type="button">None</button>
+          </div>
+        </div>
+        <div class="event-list" id="event-list" aria-label="Saved dates"></div>
+      </section>
+
+      <section class="moment-strip" aria-live="polite">
+        <div>
+          <p class="label">Right now</p>
+          <h2 id="headline">Choose a date to begin.</h2>
+        </div>
+        <div class="next-toast" id="next-toast">
+          <span class="mini-label">Next celebration</span>
+          <strong>Waiting for a date</strong>
+        </div>
+      </section>
+
+      <section class="metrics-grid" id="metrics-grid" aria-label="Elapsed time totals"></section>
+
+      <section class="timeline-section">
+        <div class="section-heading">
+          <div>
+            <p class="label">Upcoming milestones</p>
+            <h2>Next reasons to celebrate</h2>
+          </div>
+          <div class="milestone-settings">
+            <div>
+              <p class="mini-label">Milestone mood</p>
+              <strong id="granularity-label">Balanced</strong>
+            </div>
+            <input
+              id="milestone-granularity"
+              type="range"
+              min="0"
+              max="2"
+              step="1"
+              value="1"
+              aria-label="Milestone granularity"
+            />
+            <span id="timeline-range">Any unit can make the list.</span>
+          </div>
+        </div>
+        <div class="timeline" id="timeline" aria-label="Celebration timeline"></div>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>

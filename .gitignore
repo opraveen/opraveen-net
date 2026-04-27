@@ -1,0 +1,14 @@
+# Private/local artifacts
+backups/
+*.zip
+
+# Scratch/source copies outside the deployable site
+/index.html
+/styles.css
+/script.js
+/scripts/
+/opraveen-net-cleanup-plan.md
+/site/assets/celebrate-preview.png
+
+# OS/editor noise
+.DS_Store
