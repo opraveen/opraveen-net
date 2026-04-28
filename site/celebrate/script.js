@@ -286,7 +286,7 @@ function isTimedCalendarMilestone(item) {
 }
 
 function calendarSummaryFor(item) {
-  return `Celebrate: ${sourceLabelFor(item)} - ${item.displayTitle}`;
+  return `Celebrate: ${sourceLabelFor(item)} - ${titleWithAge(item)}`;
 }
 
 function calendarFilenameFor(item) {
@@ -301,7 +301,7 @@ function calendarDescriptionFor(item) {
     : "";
 
   return [
-    `${item.displayTitle} for ${sourceLabelFor(item)}.`,
+    `${titleWithAge(item)} for ${sourceLabelFor(item)}.`,
     `Milestone moment: ${dateTimeFormatter.format(item.date)}.`,
     related,
     "Made with Celebrate: https://www.opraveen.net/celebrate/",
@@ -359,15 +359,20 @@ function milestonePartyLine(item) {
   return lines[item.unit] || "Reason to celebrate unlocked.";
 }
 
+function titleWithAge(item) {
+  return item.ageLabel ? `${item.displayTitle} (${item.ageLabel})` : item.displayTitle;
+}
+
 function milestoneDetailFor(item) {
   const source = sourceLabelFor(item);
   const moment = dateTimeFormatter.format(item.date);
+  const age = item.ageLabel ? ` (${item.ageLabel})` : "";
 
   if (item.sourceType === "combined") {
-    return `Your selected dates hit ${item.displayTitle} together on ${moment}.`;
+    return `Your selected dates hit ${item.displayTitle}${age} together on ${moment}.`;
   }
 
-  return `${source} hits ${item.displayTitle} on ${moment}.`;
+  return `${source} hits ${item.displayTitle}${age} on ${moment}.`;
 }
 
 function downloadCalendarEvent(item) {
@@ -812,16 +817,22 @@ function futureMilestonesForEvent(event, now) {
 
   return milestoneDefs.flatMap((def) =>
     milestoneValues(def.unit, elapsedMs / def.ms, elapsedMs, mode)
-      .map((value) => ({
-        color: def.color,
-        date: def.dateForEvent(event.date, value),
-        displayTitle: formatMilestoneTitle(value, def.unit),
-        priority: def.priority,
-        sourceName: event.name,
-        sourceType: "date",
-        unit: def.unit,
-        value,
-      }))
+      .map((value) => {
+        const date = def.dateForEvent(event.date, value);
+        const ageYears = preciseCalendarParts(event.date, date).years;
+
+        return {
+          ageLabel: `${ageYears}Y`,
+          color: def.color,
+          date,
+          displayTitle: formatMilestoneTitle(value, def.unit),
+          priority: def.priority,
+          sourceName: event.name,
+          sourceType: "date",
+          unit: def.unit,
+          value,
+        };
+      })
       .filter((item) => item.date > now)
       .slice(0, 4),
   );
@@ -842,6 +853,7 @@ function futureMilestonesForGroup(group, now) {
         const date = dateForCombinedTarget(group, now, targetMs);
 
         return {
+          ageLabel: `${formatCompactWhole(targetMs / MS.year)}Y`,
           color: def.color,
           date,
           displayTitle: formatMilestoneTitle(value, def.unit),
@@ -1078,7 +1090,7 @@ function renderTimeline(group, now) {
         .map((related) => {
           const relatedSource = sourceLabelFor(related);
           const prefix = relatedSource === sourceLabel ? "" : `${relatedSource}: `;
-          return `${prefix}${related.displayTitle}`;
+          return `${prefix}${titleWithAge(related)}`;
         })
         .join(" + ");
       const extraLabel = item.related.length
@@ -1089,13 +1101,14 @@ function renderTimeline(group, now) {
       const relatedLine = item.related.length
         ? `Same-day bonus: ${extraText}${item.related.length > 2 ? ` + ${item.related.length - 2} more` : ""}`
         : "Add it to your calendar and give future-you a reason to smile.";
-      const calendarLabel = `Add ${item.displayTitle} for ${sourceLabel} to calendar`;
+      const calendarLabel = `Add ${titleWithAge(item)} for ${sourceLabel} to calendar`;
+      const ageBadge = item.ageLabel ? `<span class="milestone-age">(${escapeHtml(item.ageLabel)})</span>` : "";
 
       return `
         <article class="milestone ${side}" style="--accent: ${item.color}">
           <span class="milestone-dot" aria-hidden="true"></span>
           <div class="milestone-card">
-            <strong title="${escapeHtml(item.displayTitle)}">${escapeHtml(item.displayTitle)}</strong>
+            <strong title="${escapeHtml(titleWithAge(item))}">${escapeHtml(item.displayTitle)} ${ageBadge}</strong>
             <time datetime="${item.date.toISOString()}">${dateFormatter.format(item.date)}</time>
             <span class="milestone-source" title="${escapeHtml(sourceLabel)}">${escapeHtml(sourceLabel)}</span>
             ${extraLabel ? `<span class="milestone-extra" title="${escapeHtml(extraLabel)}">${escapeHtml(extraLabel)}</span>` : ""}
@@ -1105,7 +1118,7 @@ function renderTimeline(group, now) {
               <span class="popover-detail">${escapeHtml(milestoneDetail)}</span>
               <span class="popover-related">${escapeHtml(relatedLine)}</span>
             </div>
-            <button class="calendar-link" type="button" data-milestone-index="${index}" aria-label="${escapeHtml(calendarLabel)}">Add to calendar</button>
+            <button class="calendar-link" type="button" data-milestone-index="${index}" aria-label="${escapeHtml(calendarLabel)}" title="Downloads an .ics calendar file">Add to calendar</button>
           </div>
         </article>
       `;
