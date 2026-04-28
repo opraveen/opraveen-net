@@ -80,6 +80,7 @@ const milestoneDefs = [
 ];
 
 const form = document.querySelector("#event-form");
+const introHeadline = document.querySelector("#intro-headline");
 const nameInput = document.querySelector("#event-name");
 const dateInput = document.querySelector("#event-date");
 const timeInput = document.querySelector("#event-time");
@@ -143,6 +144,30 @@ const unitInterestBonus = {
   minutes: 210,
   seconds: 120,
 };
+
+const introHeadlines = [
+  "10,000 days deserve a cake!",
+  "1B seconds deserve a huge cake!",
+  "100 months deserve a treat!",
+  "1,000 weeks deserve a party!",
+  "Every date has a party hiding in it.",
+  "Your next excuse to celebrate starts here.",
+  "Tiny milestones. Big cake energy.",
+  "A billion seconds calls for candles.",
+  "Ordinary dates can throw surprise parties.",
+  "Find the confetti hiding in your calendar.",
+  "Some Tuesdays secretly deserve cake.",
+  "Every milestone wants a little sparkle.",
+];
+
+function setRandomIntroHeadline() {
+  if (!introHeadline) {
+    return;
+  }
+
+  const index = Math.floor(Math.random() * introHeadlines.length);
+  introHeadline.textContent = introHeadlines[index];
+}
 
 function toDateInputValue(date) {
   const year = String(date.getFullYear()).padStart(4, "0");
@@ -1303,6 +1328,7 @@ window.addEventListener("hashchange", () => {
   }
 });
 
+setRandomIntroHeadline();
 loadSharedSetup();
 render();
 ticker = setInterval(renderTick, 1000);
