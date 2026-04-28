@@ -1113,16 +1113,29 @@ button:disabled {
 }
 
 .milestone-hours {
-  --shape-tilt: 1.2deg;
-  --shape-padding: 11px 17px 9px;
-  --shape-path: polygon(13% 0, 87% 0, 100% 26%, 90% 50%, 100% 74%, 87% 100%, 13% 100%, 0 74%, 10% 50%, 0 26%);
+  --shape-radius: 24px;
+  --shape-tilt: 0.7deg;
+  --shape-padding: 12px 13px 10px;
+  --shape-path: inset(0 round 24px);
   --shape-bg:
-    repeating-linear-gradient(115deg, rgba(45, 108, 223, 0.13) 0 9px, transparent 9px 18px),
+    radial-gradient(circle at 16% 50%, rgba(255, 255, 255, 0.98) 0 8px, transparent 9px),
+    radial-gradient(circle at 84% 50%, rgba(255, 255, 255, 0.98) 0 8px, transparent 9px),
+    repeating-linear-gradient(115deg, rgba(45, 108, 223, 0.12) 0 9px, transparent 9px 19px),
     linear-gradient(180deg, rgba(244, 249, 255, 0.98), rgba(255, 255, 255, 0.91));
 }
 
 .milestone-hours .milestone-card::before {
-  border-color: color-mix(in srgb, var(--accent), white 42%);
+  border: 2px dashed color-mix(in srgb, var(--accent), white 40%);
+}
+
+.milestone-hours .milestone-card::after {
+  left: 15px;
+  right: 15px;
+  bottom: -5px;
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent), white 62%);
+  opacity: 0.72;
 }
 
 .milestone-minutes {
