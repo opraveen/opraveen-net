@@ -654,6 +654,27 @@ button:disabled {
   white-space: normal;
 }
 
+.calendar-link {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 0;
+  margin-top: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--aqua-dark);
+  font-size: clamp(0.5rem, 0.58vw, 0.56rem);
+  font-weight: 800;
+  line-height: 1.1;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.calendar-link:hover {
+  background: transparent;
+  color: var(--ink);
+}
+
 .empty-state {
   align-self: center;
   padding: 18px;

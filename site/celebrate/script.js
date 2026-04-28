@@ -104,6 +104,7 @@ let events = [];
 let nextId = 1;
 let ticker = null;
 let nextFullRefreshAt = null;
+let currentTimelineItems = [];
 
 const formatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 0,
@@ -123,6 +124,14 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, {
   month: "short",
   day: "numeric",
   year: "numeric",
+});
+
+const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
 });
 
 const unitInterestBonus = {
@@ -229,6 +238,124 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function escapeIcsText(value) {
+  return String(value)
+    .replaceAll("\\", "\\\\")
+    .replaceAll("\n", "\\n")
+    .replaceAll(",", "\\,")
+    .replaceAll(";", "\\;");
+}
+
+function foldIcsLine(line) {
+  const chunks = [];
+  let remaining = line;
+
+  while (remaining.length > 72) {
+    chunks.push(remaining.slice(0, 72));
+    remaining = ` ${remaining.slice(72)}`;
+  }
+
+  chunks.push(remaining);
+  return chunks.join("\r\n");
+}
+
+function slugify(value) {
+  return String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "milestone";
+}
+
+function formatIcsDate(date) {
+  const year = String(date.getFullYear()).padStart(4, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}${month}${day}`;
+}
+
+function formatIcsDateTime(date) {
+  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+function isTimedCalendarMilestone(item) {
+  return ["hours", "minutes", "seconds"].includes(item.unit);
+}
+
+function calendarSummaryFor(item) {
+  return `Celebrate: ${sourceLabelFor(item)} - ${item.displayTitle}`;
+}
+
+function calendarFilenameFor(item) {
+  return `${slugify(calendarSummaryFor(item))}.ics`;
+}
+
+function calendarDescriptionFor(item) {
+  const related = item.related?.length
+    ? `Also on this day: ${item.related
+        .map((relatedItem) => `${sourceLabelFor(relatedItem)} - ${relatedItem.displayTitle}`)
+        .join(", ")}.`
+    : "";
+
+  return [
+    `${item.displayTitle} for ${sourceLabelFor(item)}.`,
+    `Milestone moment: ${dateTimeFormatter.format(item.date)}.`,
+    related,
+    "Made with Celebrate: https://www.opraveen.net/celebrate/",
+  ].filter(Boolean).join("\n");
+}
+
+function calendarEventFor(item) {
+  const now = new Date();
+  const summary = calendarSummaryFor(item);
+  const description = calendarDescriptionFor(item);
+  const uid = `${slugify(`${summary}-${item.date.getTime()}`)}@celebrate.opraveen.net`;
+  const timed = isTimedCalendarMilestone(item);
+  const start = item.date;
+  const end = timed ? new Date(start.getTime() + 30 * MS.minute) : addDays(start, 1);
+  const dateLines = timed
+    ? [
+        `DTSTART:${formatIcsDateTime(start)}`,
+        `DTEND:${formatIcsDateTime(end)}`,
+      ]
+    : [
+        `DTSTART;VALUE=DATE:${formatIcsDate(start)}`,
+        `DTEND;VALUE=DATE:${formatIcsDate(end)}`,
+      ];
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//opraveen.net//Celebrate//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "BEGIN:VEVENT",
+    `UID:${uid}`,
+    `DTSTAMP:${formatIcsDateTime(now)}`,
+    ...dateLines,
+    `SUMMARY:${escapeIcsText(summary)}`,
+    `DESCRIPTION:${escapeIcsText(description)}`,
+    "URL:https://www.opraveen.net/celebrate/",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ];
+
+  return `${lines.map(foldIcsLine).join("\r\n")}\r\n`;
+}
+
+function downloadCalendarEvent(item) {
+  const blob = new Blob([calendarEventFor(item)], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = calendarFilenameFor(item);
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 function preciseCalendarParts(from, to) {
@@ -894,6 +1021,7 @@ function renderTimeline(group, now) {
   const items = futureMilestones(group, now);
 
   if (!items.length) {
+    currentTimelineItems = [];
     timeline.innerHTML = `<p class="empty-state">Add or select a date to map the next celebration.</p>`;
     timelineRange.textContent = "Any unit can make the list.";
     nextToast.innerHTML = `<span class="mini-label">Next celebration</span><strong>Waiting for a date</strong>`;
@@ -907,6 +1035,7 @@ function renderTimeline(group, now) {
   const source = soonest.sourceType === "combined" ? "Together" : soonest.sourceName;
   const toast = `${source}: ${soonest.displayTitle} - ${dateFormatter.format(soonest.date)}`;
 
+  currentTimelineItems = items;
   nextToast.innerHTML = `
     <span class="mini-label">Next celebration</span>
     <strong title="${escapeHtml(toast)}">${escapeHtml(toast)}</strong>
@@ -939,6 +1068,7 @@ function renderTimeline(group, now) {
             <time datetime="${item.date.toISOString()}">${dateFormatter.format(item.date)}</time>
             <span class="milestone-source" title="${escapeHtml(sourceLabel)}">${escapeHtml(sourceLabel)}</span>
             ${extraLabel ? `<span class="milestone-extra" title="${escapeHtml(extraLabel)}">${escapeHtml(extraLabel)}</span>` : ""}
+            <button class="calendar-link" type="button" data-milestone-index="${index}">Add to calendar</button>
           </div>
         </article>
       `;
@@ -1097,6 +1227,20 @@ shareButton.addEventListener("click", () => {
 copyShareButton.addEventListener("click", () => {
   if (events.length) {
     copyShareLink();
+  }
+});
+
+timeline.addEventListener("click", (event) => {
+  const calendarButton = event.target.closest(".calendar-link");
+
+  if (!calendarButton) {
+    return;
+  }
+
+  const item = currentTimelineItems[Number(calendarButton.dataset.milestoneIndex)];
+
+  if (item) {
+    downloadCalendarEvent(item);
   }
 });
 
