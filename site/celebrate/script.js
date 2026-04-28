@@ -1105,8 +1105,9 @@ function renderTimeline(group, now) {
       const ageBadge = item.ageLabel ? `<span class="milestone-age">(${escapeHtml(item.ageLabel)})</span>` : "";
 
       return `
-        <article class="milestone ${side}" style="--accent: ${item.color}">
+        <article class="milestone milestone-${item.unit} ${side}" style="--accent: ${item.color}">
           <span class="milestone-dot" aria-hidden="true"></span>
+          <span class="sparkle-burst" aria-hidden="true"></span>
           <div class="milestone-card">
             <strong title="${escapeHtml(titleWithAge(item))}">${escapeHtml(item.displayTitle)} ${ageBadge}</strong>
             <time datetime="${item.date.toISOString()}">${dateFormatter.format(item.date)}</time>
