@@ -289,6 +289,7 @@ input {
   position: absolute;
   right: clamp(16px, 2.4vw, 38px);
   top: -26px;
+  z-index: 0;
   width: clamp(84px, 8vw, 128px);
   aspect-ratio: 1;
   border-radius: 50%;
@@ -296,7 +297,13 @@ input {
     radial-gradient(circle at 52% 42%, transparent 0 34%, rgba(255, 255, 255, 0.78) 35% 43%, transparent 44%),
     conic-gradient(from 12deg, #ff7aa8, #ffe071, #7ee2b8, #b987ff, #ff7aa8);
   opacity: 0.38;
+  pointer-events: none;
   transform: rotate(16deg);
+}
+
+.control-bar > * {
+  position: relative;
+  z-index: 1;
 }
 
 .intro {
