@@ -345,6 +345,31 @@ function calendarEventFor(item) {
   return `${lines.map(foldIcsLine).join("\r\n")}\r\n`;
 }
 
+function milestonePartyLine(item) {
+  const lines = {
+    years: "Classic big-deal moment.",
+    months: "Monthly confetti checkpoint.",
+    weeks: "A neat weekly reason to cheer.",
+    days: "Whole-day party math unlocked.",
+    hours: "A precise little celebration.",
+    minutes: "Tiny time, huge excuse.",
+    seconds: "Blink and it becomes a party.",
+  };
+
+  return lines[item.unit] || "Reason to celebrate unlocked.";
+}
+
+function milestoneDetailFor(item) {
+  const source = sourceLabelFor(item);
+  const moment = dateTimeFormatter.format(item.date);
+
+  if (item.sourceType === "combined") {
+    return `Your selected dates hit ${item.displayTitle} together on ${moment}.`;
+  }
+
+  return `${source} hits ${item.displayTitle} on ${moment}.`;
+}
+
 function downloadCalendarEvent(item) {
   const blob = new Blob([calendarEventFor(item)], { type: "text/calendar;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -1059,6 +1084,12 @@ function renderTimeline(group, now) {
       const extraLabel = item.related.length
         ? `also ${extraText}${item.related.length > 2 ? ` + ${item.related.length - 2} more` : ""}`
         : "";
+      const partyLine = milestonePartyLine(item);
+      const milestoneDetail = milestoneDetailFor(item);
+      const relatedLine = item.related.length
+        ? `Same-day bonus: ${extraText}${item.related.length > 2 ? ` + ${item.related.length - 2} more` : ""}`
+        : "Add it to your calendar and give future-you a reason to smile.";
+      const calendarLabel = `Add ${item.displayTitle} for ${sourceLabel} to calendar`;
 
       return `
         <article class="milestone ${side}" style="--accent: ${item.color}">
@@ -1068,7 +1099,13 @@ function renderTimeline(group, now) {
             <time datetime="${item.date.toISOString()}">${dateFormatter.format(item.date)}</time>
             <span class="milestone-source" title="${escapeHtml(sourceLabel)}">${escapeHtml(sourceLabel)}</span>
             ${extraLabel ? `<span class="milestone-extra" title="${escapeHtml(extraLabel)}">${escapeHtml(extraLabel)}</span>` : ""}
-            <button class="calendar-link" type="button" data-milestone-index="${index}">Add to calendar</button>
+            <div class="milestone-popover" role="note">
+              <span class="party-label">Party cue</span>
+              <strong class="popover-title">${escapeHtml(partyLine)}</strong>
+              <span class="popover-detail">${escapeHtml(milestoneDetail)}</span>
+              <span class="popover-related">${escapeHtml(relatedLine)}</span>
+            </div>
+            <button class="calendar-link" type="button" data-milestone-index="${index}" aria-label="${escapeHtml(calendarLabel)}">Add to calendar</button>
           </div>
         </article>
       `;
