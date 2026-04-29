@@ -93,6 +93,12 @@ const sharePanel = document.querySelector("#share-panel");
 const shareUrlInput = document.querySelector("#share-url");
 const copyShareButton = document.querySelector("#copy-share");
 const shareStatus = document.querySelector("#share-status");
+const feedbackOpenButton = document.querySelector("#feedback-open");
+const feedbackDialog = document.querySelector("#feedback-dialog");
+const feedbackCloseButton = document.querySelector("#feedback-close");
+const feedbackForm = document.querySelector("#feedback-form");
+const feedbackMessage = document.querySelector("#feedback-message");
+const feedbackStatus = document.querySelector("#feedback-status");
 const headline = document.querySelector("#headline");
 const nextToast = document.querySelector("#next-toast");
 const metricsGrid = document.querySelector("#metrics-grid");
@@ -1234,6 +1240,62 @@ async function copyShareLink() {
   }
 }
 
+function openFeedbackDialog() {
+  if (!feedbackDialog) {
+    return;
+  }
+
+  feedbackDialog.hidden = false;
+  feedbackStatus.textContent = "";
+  feedbackMessage.focus();
+}
+
+function closeFeedbackDialog() {
+  if (!feedbackDialog) {
+    return;
+  }
+
+  feedbackDialog.hidden = true;
+  feedbackStatus.textContent = "";
+}
+
+function encodeFeedbackForm(formData) {
+  return new URLSearchParams(formData).toString();
+}
+
+async function submitFeedback(event) {
+  event.preventDefault();
+
+  const submitButton = feedbackForm.querySelector("button[type='submit']");
+
+  if (window.location.protocol === "file:") {
+    feedbackStatus.textContent = "Feedback sends from the live site after deploy.";
+    return;
+  }
+
+  feedbackStatus.textContent = "Sending...";
+  submitButton.disabled = true;
+
+  try {
+    const response = await fetch("/", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: encodeFeedbackForm(new FormData(feedbackForm)),
+    });
+
+    if (!response.ok) {
+      throw new Error("Feedback form failed");
+    }
+
+    feedbackForm.reset();
+    feedbackStatus.textContent = "Thank you. Feedback sent!";
+  } catch (error) {
+    feedbackStatus.textContent = "Could not send yet. Try the email link instead.";
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
 function addEventFromForm() {
   const date = parseSelection();
 
@@ -1303,6 +1365,21 @@ shareButton.addEventListener("click", () => {
 copyShareButton.addEventListener("click", () => {
   if (events.length) {
     copyShareLink();
+  }
+});
+
+feedbackOpenButton.addEventListener("click", openFeedbackDialog);
+feedbackCloseButton.addEventListener("click", closeFeedbackDialog);
+feedbackForm.addEventListener("submit", submitFeedback);
+feedbackDialog.addEventListener("click", (event) => {
+  if (event.target === feedbackDialog) {
+    closeFeedbackDialog();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !feedbackDialog.hidden) {
+    closeFeedbackDialog();
   }
 });
 

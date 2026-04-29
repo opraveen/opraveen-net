@@ -131,6 +131,52 @@
       </section>
     </main>
 
+    <button class="feedback-fab" id="feedback-open" type="button">Feedback</button>
+
+    <div class="feedback-dialog" id="feedback-dialog" role="dialog" aria-modal="true" aria-labelledby="feedback-title" hidden>
+      <div class="feedback-card">
+        <div class="feedback-header">
+          <div>
+            <p class="mini-label">Help shape Celebrate</p>
+            <h2 id="feedback-title">Send a little feedback</h2>
+          </div>
+          <button class="feedback-close" id="feedback-close" type="button" aria-label="Close feedback form">x</button>
+        </div>
+
+        <form
+          class="feedback-form"
+          id="feedback-form"
+          name="celebrate-feedback"
+          method="POST"
+          data-netlify="true"
+          netlify-honeypot="bot-field"
+        >
+          <input type="hidden" name="form-name" value="celebrate-feedback" />
+          <input type="hidden" name="subject" value="Celebrate feedback" data-remove-prefix />
+          <input type="hidden" name="source" value="celebrate" />
+          <p class="bot-field">
+            <label>Leave this empty: <input name="bot-field" /></label>
+          </p>
+          <p class="feedback-note">
+            Please avoid sharing birthdays or private details. The form sends only what you type here.
+          </p>
+          <label>
+            <span>What would make this more fun?</span>
+            <textarea id="feedback-message" name="message" maxlength="1200" required></textarea>
+          </label>
+          <label>
+            <span>Email (optional)</span>
+            <input id="feedback-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" />
+          </label>
+          <div class="feedback-actions">
+            <button type="submit">Send feedback</button>
+            <a href="mailto:opraveen@gmail.com?subject=Celebrate%20feedback">Email instead</a>
+          </div>
+          <span id="feedback-status" aria-live="polite"></span>
+        </form>
+      </div>
+    </div>
+
     <script src="script.js"></script>
   </body>
 </html>
