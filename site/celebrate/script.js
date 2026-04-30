@@ -1263,24 +1263,44 @@ function encodeFeedbackForm(formData) {
   return new URLSearchParams(formData).toString();
 }
 
+function feedbackMailtoUrl(formData) {
+  const message = String(formData.get("message") || "").trim();
+  const email = String(formData.get("email") || "").trim();
+  const body = [
+    message,
+    "",
+    email ? `Reply-to: ${email}` : "",
+    "Sent from Celebrate feedback.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return `mailto:opraveen@gmail.com?subject=${encodeURIComponent("Celebrate feedback")}&body=${encodeURIComponent(body)}`;
+}
+
+function openFeedbackEmailDraft(formData) {
+  feedbackStatus.textContent = "Opening an email draft...";
+  window.location.href = feedbackMailtoUrl(formData);
+}
+
 async function submitFeedback(event) {
   event.preventDefault();
 
   const submitButton = feedbackForm.querySelector("button[type='submit']");
-
-  if (window.location.protocol === "file:") {
-    feedbackStatus.textContent = "Feedback sends from the live site after deploy.";
-    return;
-  }
+  const formData = new FormData(feedbackForm);
 
   feedbackStatus.textContent = "Sending...";
   submitButton.disabled = true;
 
   try {
-    const response = await fetch("/", {
+    if (!window.location.protocol.startsWith("http")) {
+      throw new Error("Feedback form needs a hosted page");
+    }
+
+    const response = await fetch(feedbackForm.getAttribute("action") || "/", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: encodeFeedbackForm(new FormData(feedbackForm)),
+      body: encodeFeedbackForm(formData),
     });
 
     if (!response.ok) {
@@ -1290,7 +1310,7 @@ async function submitFeedback(event) {
     feedbackForm.reset();
     feedbackStatus.textContent = "Thank you. Feedback sent!";
   } catch (error) {
-    feedbackStatus.textContent = "Could not send yet. Try the email link instead.";
+    openFeedbackEmailDraft(formData);
   } finally {
     submitButton.disabled = false;
   }
