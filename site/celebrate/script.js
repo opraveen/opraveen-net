@@ -3,6 +3,7 @@ const MS = {
   minute: 60 * 1000,
   hour: 60 * 60 * 1000,
   day: 24 * 60 * 60 * 1000,
+  sol: 88775.244 * 1000,
   week: 7 * 24 * 60 * 60 * 1000,
   month: 30.436875 * 24 * 60 * 60 * 1000,
   year: 365.2425 * 24 * 60 * 60 * 1000,
@@ -13,6 +14,7 @@ const accents = {
   months: "#e85d4f",
   weeks: "#efb63e",
   days: "#4b9c67",
+  sols: "#c56b45",
   hours: "#2d6cdf",
   minutes: "#9d4b78",
   seconds: "#17202a",
@@ -48,6 +50,13 @@ const milestoneDefs = [
     priority: 4,
     ms: MS.day,
     dateForEvent: (date, value) => addDays(date, value),
+  },
+  {
+    unit: "sols",
+    color: accents.sols,
+    priority: 3.8,
+    ms: MS.sol,
+    dateForEvent: (date, value) => new Date(date.getTime() + value * MS.sol),
   },
   {
     unit: "hours",
@@ -145,6 +154,7 @@ const unitInterestBonus = {
   years: 600,
   months: 500,
   days: 460,
+  sols: 430,
   hours: 360,
   weeks: 340,
   minutes: 210,
@@ -153,6 +163,7 @@ const unitInterestBonus = {
 
 const introHeadlines = [
   "10,000 days deserve a cake!",
+  "1,000 sols deserve a cosmic cake!",
   "1B seconds deserve a huge cake!",
   "100 months deserve a treat!",
   "1,000 weeks deserve a party!",
@@ -236,6 +247,10 @@ function formatMilestoneValue(value, unit) {
     return formatCompactWhole(value);
   }
 
+  if (unit === "sols" && value >= 10000) {
+    return formatCompactWhole(value);
+  }
+
   if (unit === "months" && value >= 1000) {
     return formatCompactOne(value);
   }
@@ -313,7 +328,7 @@ function formatIcsDateTime(date) {
 }
 
 function isTimedCalendarMilestone(item) {
-  return ["hours", "minutes", "seconds"].includes(item.unit);
+  return ["sols", "hours", "minutes", "seconds"].includes(item.unit);
 }
 
 function calendarSummaryFor(item) {
@@ -382,6 +397,7 @@ function milestonePartyLine(item) {
     months: "Monthly confetti checkpoint.",
     weeks: "A neat weekly reason to cheer.",
     days: "Whole-day party math unlocked.",
+    sols: "Mars-day party math unlocked.",
     hours: "A precise little celebration.",
     minutes: "Tiny time, huge excuse.",
     seconds: "Blink and it becomes a party.",
@@ -527,6 +543,10 @@ function magnitudeBonus(item) {
     return rounded % 10000 === 0 ? 130 : rounded % 1000 === 0 ? 95 : 45;
   }
 
+  if (item.unit === "sols") {
+    return rounded % 10000 === 0 ? 120 : rounded % 1000 === 0 ? 90 : 42;
+  }
+
   if (item.unit === "hours") {
     return rounded % 1000000 === 0 ? 155 : rounded % 100000 === 0 ? 120 : 55;
   }
@@ -609,6 +629,11 @@ function milestoneValues(unit, current, elapsedMs, mode) {
   }
 
   if (unit === "days") {
+    const step = mode === 0 ? 5000 : mode === 1 ? 1000 : isKid ? 500 : 1000;
+    return nextMultiples(current, step, 8);
+  }
+
+  if (unit === "sols") {
     const step = mode === 0 ? 5000 : mode === 1 ? 1000 : isKid ? 500 : 1000;
     return nextMultiples(current, step, 8);
   }
@@ -1048,6 +1073,13 @@ function renderMetrics(totalMs, group, now) {
       value: formatWhole(totalMs / MS.day),
       note: "whole days",
       exact: `${formatWhole(totalMs / MS.day)} days rounded`,
+    },
+    {
+      key: "sols",
+      unit: "Sols",
+      value: formatWhole(totalMs / MS.sol),
+      note: "Mars solar days",
+      exact: `${formatWhole(totalMs / MS.sol)} Mars solar days rounded`,
     },
     {
       key: "hours",
