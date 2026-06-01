@@ -93,6 +93,7 @@ const introHeadline = document.querySelector("#intro-headline");
 const nameInput = document.querySelector("#event-name");
 const dateInput = document.querySelector("#event-date");
 const timeInput = document.querySelector("#event-time");
+const timeZoneSelect = document.querySelector("#time-zone");
 const eventList = document.querySelector("#event-list");
 const selectionSummary = document.querySelector("#selection-summary");
 const selectAllButton = document.querySelector("#select-all");
@@ -122,6 +123,24 @@ let ticker = null;
 let nextFullRefreshAt = null;
 let currentTimelineItems = [];
 
+const commonTimeZones = [
+  "UTC",
+  "America/Los_Angeles",
+  "America/Denver",
+  "America/Chicago",
+  "America/New_York",
+  "Europe/London",
+  "Europe/Paris",
+  "Asia/Dubai",
+  "Asia/Kolkata",
+  "Asia/Singapore",
+  "Asia/Tokyo",
+  "Australia/Sydney",
+];
+
+const zonedPartsFormatters = new Map();
+let selectedTimeZone = detectTimeZone();
+
 const formatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 0,
 });
@@ -136,19 +155,8 @@ const compactOneFormatter = new Intl.NumberFormat(undefined, {
   notation: "compact",
 });
 
-const dateFormatter = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-});
-
-const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-});
+let dateFormatter = makeDateFormatter(selectedTimeZone);
+let dateTimeFormatter = makeDateTimeFormatter(selectedTimeZone);
 
 const unitInterestBonus = {
   years: 600,
@@ -186,29 +194,259 @@ function setRandomIntroHeadline() {
   introHeadline.textContent = introHeadlines[index];
 }
 
-function toDateInputValue(date) {
-  const year = String(date.getFullYear()).padStart(4, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+function detectTimeZone() {
+  const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return isValidTimeZone(detected) ? detected : "UTC";
+}
+
+function isValidTimeZone(timeZone) {
+  if (!timeZone || typeof timeZone !== "string") {
+    return false;
+  }
+
+  try {
+    new Intl.DateTimeFormat(undefined, { timeZone }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function makeDateFormatter(timeZone) {
+  return new Intl.DateTimeFormat(undefined, {
+    timeZone,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function makeDateTimeFormatter(timeZone) {
+  return new Intl.DateTimeFormat(undefined, {
+    timeZone,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
+}
+
+function getSupportedTimeZones() {
+  const supported = typeof Intl.supportedValuesOf === "function"
+    ? Intl.supportedValuesOf("timeZone")
+    : [];
+  return [...new Set([...commonTimeZones, selectedTimeZone, ...supported])]
+    .filter(isValidTimeZone)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function timeZoneOffsetLabel(timeZone) {
+  try {
+    const part = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      timeZoneName: "shortOffset",
+    }).formatToParts(new Date()).find((item) => item.type === "timeZoneName");
+
+    return part?.value.replace("GMT", "UTC") || "";
+  } catch {
+    return "";
+  }
+}
+
+function formatTimeZoneLabel(timeZone) {
+  const name = timeZone
+    .replaceAll("_", " ")
+    .replaceAll("/", " / ");
+  const offset = timeZoneOffsetLabel(timeZone);
+
+  return offset ? `${name} (${offset})` : name;
+}
+
+function populateTimeZoneSelect() {
+  if (!timeZoneSelect) {
+    return;
+  }
+
+  timeZoneSelect.innerHTML = getSupportedTimeZones()
+    .map((timeZone) => `
+      <option value="${escapeHtml(timeZone)}">${escapeHtml(formatTimeZoneLabel(timeZone))}</option>
+    `)
+    .join("");
+  timeZoneSelect.value = selectedTimeZone;
+  timeZoneSelect.title = selectedTimeZone;
+}
+
+function zonedPartsFormatterFor(timeZone = selectedTimeZone) {
+  if (!zonedPartsFormatters.has(timeZone)) {
+    zonedPartsFormatters.set(timeZone, new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      calendar: "gregory",
+      numberingSystem: "latn",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    }));
+  }
+
+  return zonedPartsFormatters.get(timeZone);
+}
+
+function zonedParts(date, timeZone = selectedTimeZone) {
+  const values = {};
+
+  zonedPartsFormatterFor(timeZone).formatToParts(date).forEach((part) => {
+    if (part.type !== "literal") {
+      values[part.type] = Number(part.value);
+    }
+  });
+
+  return {
+    year: values.year,
+    month: values.month,
+    day: values.day,
+    hours: values.hour === 24 ? 0 : values.hour,
+    minutes: values.minute,
+    seconds: values.second,
+  };
+}
+
+function utcDateFromParts(year, monthIndex, day, hours = 0, minutes = 0, seconds = 0, ms = 0) {
+  const date = new Date(0);
+
+  date.setUTCFullYear(year, monthIndex, day);
+  date.setUTCHours(hours, minutes, seconds, ms);
+  return date;
+}
+
+function utcTimestampFromParts(year, monthIndex, day, hours = 0, minutes = 0, seconds = 0, ms = 0) {
+  return utcDateFromParts(year, monthIndex, day, hours, minutes, seconds, ms).getTime();
+}
+
+function daysInMonth(year, month) {
+  return utcDateFromParts(year, month, 0).getUTCDate();
+}
+
+function dateFromZonedValues(
+  year,
+  month,
+  day,
+  hours = 0,
+  minutes = 0,
+  seconds = 0,
+  ms = 0,
+  timeZone = selectedTimeZone,
+) {
+  const target = utcTimestampFromParts(year, month - 1, day, hours, minutes, seconds, ms);
+  let date = new Date(target);
+
+  for (let index = 0; index < 4; index += 1) {
+    const parts = zonedParts(date, timeZone);
+    const actual = utcTimestampFromParts(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      parts.hours,
+      parts.minutes,
+      parts.seconds,
+      ms,
+    );
+    const delta = target - actual;
+
+    if (delta === 0) {
+      return date;
+    }
+
+    date = new Date(date.getTime() + delta);
+  }
+
+  return date;
+}
+
+function normalizeYearMonth(year, monthIndex) {
+  const date = utcDateFromParts(year, monthIndex, 1);
+
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+  };
+}
+
+function updateDateFormatters() {
+  dateFormatter = makeDateFormatter(selectedTimeZone);
+  dateTimeFormatter = makeDateTimeFormatter(selectedTimeZone);
+}
+
+function rebuildEventDatesForTimeZone() {
+  events = events.map((event) => {
+    const dateValue = event.dateValue || toDateInputValue(event.date);
+    const timeValue = event.hasTime ? event.timeValue || toTimeInputValue(event.date) : "";
+    const date = dateFromParts(dateValue, timeValue);
+
+    return {
+      ...event,
+      date,
+      dateValue,
+      timeValue,
+    };
+  });
+}
+
+function applyTimeZone(timeZone, options = {}) {
+  if (!isValidTimeZone(timeZone)) {
+    return false;
+  }
+
+  selectedTimeZone = timeZone;
+  updateDateFormatters();
+
+  if (timeZoneSelect) {
+    if (![...timeZoneSelect.options].some((option) => option.value === timeZone)) {
+      timeZoneSelect.add(new Option(formatTimeZoneLabel(timeZone), timeZone));
+    }
+
+    timeZoneSelect.value = timeZone;
+    timeZoneSelect.title = timeZone;
+  }
+
+  if (options.rebuildEvents !== false) {
+    rebuildEventDatesForTimeZone();
+  }
+
+  return true;
+}
+
+function toDateInputValue(date, timeZone = selectedTimeZone) {
+  const parts = zonedParts(date, timeZone);
+  const year = String(parts.year).padStart(4, "0");
+  const month = String(parts.month).padStart(2, "0");
+  const day = String(parts.day).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
-function toTimeInputValue(date) {
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
+function toTimeInputValue(date, timeZone = selectedTimeZone) {
+  const parts = zonedParts(date, timeZone);
+  const hours = String(parts.hours).padStart(2, "0");
+  const minutes = String(parts.minutes).padStart(2, "0");
   return `${hours}:${minutes}`;
 }
 
-function dateFromParts(dateValue, timeValue = "") {
+function dateFromParts(dateValue, timeValue = "", timeZone = selectedTimeZone) {
   const [year, month, day] = dateValue.split("-").map(Number);
   const [hours = 0, minutes = 0] = timeValue
     ? timeValue.split(":").map(Number)
     : [];
-  const date = new Date(0);
 
-  date.setFullYear(year, month - 1, day);
-  date.setHours(hours, minutes, 0, 0);
-  return date;
+  if (![year, month, day, hours, minutes].every(Number.isFinite)) {
+    return new Date(NaN);
+  }
+
+  return dateFromZonedValues(year, month, day, hours, minutes, 0, 0, timeZone);
 }
 
 function parseSelection() {
@@ -316,9 +554,10 @@ function slugify(value) {
 }
 
 function formatIcsDate(date) {
-  const year = String(date.getFullYear()).padStart(4, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  const parts = zonedParts(date);
+  const year = String(parts.year).padStart(4, "0");
+  const month = String(parts.month).padStart(2, "0");
+  const day = String(parts.day).padStart(2, "0");
 
   return `${year}${month}${day}`;
 }
@@ -443,13 +682,15 @@ function preciseCalendarParts(from, to) {
     [start, end] = [end, start];
   }
 
-  let years = end.getFullYear() - start.getFullYear();
-  let months = end.getMonth() - start.getMonth();
-  let days = end.getDate() - start.getDate();
+  const startParts = zonedParts(start);
+  const endParts = zonedParts(end);
+  let years = endParts.year - startParts.year;
+  let months = endParts.month - startParts.month;
+  let days = endParts.day - startParts.day;
 
   if (days < 0) {
     months -= 1;
-    days += new Date(end.getFullYear(), end.getMonth(), 0).getDate();
+    days += daysInMonth(endParts.year, endParts.month - 1);
   }
 
   if (months < 0) {
@@ -472,19 +713,31 @@ function approximateParts(ms) {
 }
 
 function addDays(date, days) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
+  const parts = zonedParts(date);
+
+  return dateFromZonedValues(
+    parts.year,
+    parts.month,
+    parts.day + days,
+    parts.hours,
+    parts.minutes,
+    parts.seconds,
+  );
 }
 
 function addMonths(date, months) {
-  const next = new Date(date);
-  const day = next.getDate();
-  next.setDate(1);
-  next.setMonth(next.getMonth() + months);
-  const daysInTarget = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
-  next.setDate(Math.min(day, daysInTarget));
-  return next;
+  const parts = zonedParts(date);
+  const target = normalizeYearMonth(parts.year, parts.month - 1 + months);
+  const day = Math.min(parts.day, daysInMonth(target.year, target.month));
+
+  return dateFromZonedValues(
+    target.year,
+    target.month,
+    day,
+    parts.hours,
+    parts.minutes,
+    parts.seconds,
+  );
 }
 
 function addYears(date, years) {
@@ -662,14 +915,17 @@ function milestoneValues(unit, current, elapsedMs, mode) {
 
 function makeEvent(name, date, options = {}) {
   const id = nextId++;
+  const hasTime = Boolean(options.hasTime);
 
   return {
     color: eventColors[(id - 1) % eventColors.length],
     date,
-    hasTime: Boolean(options.hasTime),
+    dateValue: options.dateValue || toDateInputValue(date),
+    hasTime,
     id,
     name: name.trim() || `Date ${id}`,
     selected: options.selected ?? true,
+    timeValue: hasTime ? options.timeValue || toTimeInputValue(date) : "",
   };
 }
 
@@ -706,13 +962,14 @@ function decodeSharePayload(value) {
 
 function sharePayload() {
   return {
-    v: 1,
+    v: 2,
     mode: milestoneMode(),
+    tz: selectedTimeZone,
     events: events.map((event) => ({
-      d: toDateInputValue(event.date),
+      d: event.dateValue || toDateInputValue(event.date),
       n: event.name,
       s: event.selected,
-      t: event.hasTime ? toTimeInputValue(event.date) : "",
+      t: event.hasTime ? event.timeValue || toTimeInputValue(event.date) : "",
     })),
   };
 }
@@ -737,6 +994,9 @@ function loadSharedSetup() {
     const payload = decodeSharePayload(payloadValue);
     const sharedEvents = Array.isArray(payload.events) ? payload.events : [];
     const sharedMode = Number(payload.mode);
+    const sharedTimeZone = isValidTimeZone(payload.tz) ? payload.tz : selectedTimeZone;
+
+    applyTimeZone(sharedTimeZone, { rebuildEvents: false });
 
     nextId = 1;
     events = sharedEvents
@@ -751,8 +1011,10 @@ function loadSharedSetup() {
         }
 
         return makeEvent(String(item.n || "").slice(0, 36), date, {
+          dateValue,
           hasTime: Boolean(timeValue),
           selected: item.s !== false,
+          timeValue,
         });
       })
       .filter(Boolean);
@@ -1356,7 +1618,11 @@ function addEventFromForm() {
     return;
   }
 
-  events.push(makeEvent(nameInput.value, date, { hasTime: Boolean(timeInput.value) }));
+  events.push(makeEvent(nameInput.value, date, {
+    dateValue: dateInput.value,
+    hasTime: Boolean(timeInput.value),
+    timeValue: timeInput.value,
+  }));
   render();
 }
 
@@ -1451,12 +1717,19 @@ timeline.addEventListener("click", (event) => {
 
 granularityInput.addEventListener("input", () => render({ refreshEvents: false }));
 
+timeZoneSelect.addEventListener("change", () => {
+  if (applyTimeZone(timeZoneSelect.value)) {
+    render();
+  }
+});
+
 window.addEventListener("hashchange", () => {
   if (loadSharedSetup()) {
     render();
   }
 });
 
+populateTimeZoneSelect();
 setRandomIntroHeadline();
 loadSharedSetup();
 render();
