@@ -980,6 +980,16 @@ function buildShareUrl() {
   return url.toString();
 }
 
+function syncAddressBarToShareUrl() {
+  const value = buildShareUrl();
+
+  if (window.location.href !== value) {
+    window.history.replaceState(null, "", value);
+  }
+
+  return value;
+}
+
 function loadSharedSetup() {
   const hash = window.location.hash.startsWith("#")
     ? window.location.hash.slice(1)
@@ -1041,7 +1051,7 @@ function refreshSharePanel() {
   }
 
   if (!sharePanel.hidden) {
-    const value = buildShareUrl();
+    const value = syncAddressBarToShareUrl();
 
     if (shareUrlInput.value !== value) {
       shareUrlInput.value = value;
@@ -1514,7 +1524,7 @@ function renderTick() {
 }
 
 async function copyShareLink() {
-  const value = buildShareUrl();
+  const value = syncAddressBarToShareUrl();
 
   shareUrlInput.value = value;
 
@@ -1672,6 +1682,11 @@ shareButton.addEventListener("click", () => {
 
   sharePanel.hidden = !sharePanel.hidden;
   shareStatus.textContent = "";
+
+  if (!sharePanel.hidden) {
+    syncAddressBarToShareUrl();
+  }
+
   refreshSharePanel();
 
   if (!sharePanel.hidden) {
